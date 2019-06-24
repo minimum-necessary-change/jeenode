@@ -147,11 +147,23 @@ void setup(void)
 
 	WiFi.begin(ssid, password);
 
-	Serial.print("Connecting to wifi");
+	Serial.print("Connecting to wifi SSID ");
+	Serial.print(ssid);
 	// Wait for connection
-	while ( WiFi.status() != WL_CONNECTED ) {
-		delay ( 500 );
-		Serial.print ( "." );
+	int now = millis();
+	while (WiFi.status() != WL_CONNECTED && (millis() - now) < 10000) {
+		delay(500);
+		Serial.print(".");
+	}
+
+	if (WiFi.status() != WL_CONNECTED) {
+		Serial.println("failed to connect to home wifi, trying softAP");
+		// Could not connect to wifi network in 5 sec? We must not be at home. Connect to softAP
+		WiFi.begin(softap_ssid, softap_password);
+		while (WiFi.status() != WL_CONNECTED) {
+			delay(500);
+			Serial.print(".");
+		}
 	}
 
 	Serial.println ( "" );
@@ -171,7 +183,7 @@ void setup(void)
 	timer1_isr_init();
 	timer1_attachInterrupt(sample_isr);
 	timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
-	timer1_write(clockCyclesPerMicrosecond() / 16 * 50); //80us = 12.5kHz sampling freq
+	timer1_write(clockCyclesPerMicrosecond() / 16 * 50); //50us = 20kHz sampling freq
 
 	Serial.println("setup done");
 

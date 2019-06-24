@@ -8,7 +8,17 @@
 #include "RF24.h"
 
 #define HAS_SOLAR_PANEL 0
+#define HAS_RF24 1
+#define HAS_LCD 0
 
+#if HAS_LCD
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C	lcd(0x27,2,1,0,4,5,6,7); // 0x27 is the I2C bus address for an unmodified backpack
+#endif
+
+const int SCL_PIN = A5;
+const int SDA_PIN = A4;
 const int CE_PIN = 9;
 const int CSN_PIN = 8;
 const int BATTERY_PIN = A3;
@@ -20,8 +30,10 @@ const int DS18B20_PIN = 7;
 
 OneWire ds(DS18B20_PIN);
 
+#if HAS_RF24
 RF24 radio(CE_PIN, CSN_PIN);
 const uint64_t pipe_address = 0xF0F0F0F0F4LL;
+#endif
 
 static unsigned long last_ping_at = 0;
 
@@ -39,6 +51,7 @@ ISR(WDT_vect)
 
 int radio_send(uint8_t p0, uint8_t p1, uint8_t p2, uint8_t p3)
 {
+#if HAS_RF24
 	uint8_t payload[4] = { p0, p1, p2, p3 };
 	digitalWrite(LED_YELLOW, 1);
 	last_ping_at = millis();
@@ -56,6 +69,7 @@ int radio_send(uint8_t p0, uint8_t p1, uint8_t p2, uint8_t p3)
 		return -1;
 	}
 	digitalWrite(LED_RED, 0);
+#endif
 	return 0;
 }
 
@@ -87,6 +101,7 @@ void setup(){
 	printf_begin();
 	Serial.begin(57600);
 
+#if HAS_RF24
 	// Radio init
 	radio.begin();
 	radio.powerDown();
@@ -108,7 +123,15 @@ void setup(){
 		// failed to initialize radio
 		init_failed = 1;
 	}
+#endif
 
+#if HAS_LCD
+	lcd.begin (16,2); // for 16 x 2 LCD module
+	lcd.setBacklightPin(3,POSITIVE);
+	lcd.setBacklight(HIGH);
+	lcd.home();
+	lcd.print("Hello");
+#endif
 
 	pinMode(LED_YELLOW, OUTPUT);
 	pinMode(LED_RED, OUTPUT);
@@ -126,7 +149,9 @@ void setup(){
 	digitalWrite(LED_RED, 0);
 	digitalWrite(LED_YELLOW, 0);
 
+#if HAS_RF24
 	radio.powerDown();
+#endif
 }
 
 float battery_voltage(uint16_t battery_level)
@@ -157,19 +182,21 @@ void loop()
 	uint16_t panel_voltage = analogRead(SOLAR_PIN);
 	uint16_t resistor_voltage = analogRead(SOLAR_RESISTOR_PIN);
 #endif
+#if HAS_RF24
 	radio.powerUp();
+#endif
+
 	bool fail = radio_send_bat(battery_level);
 #if HAS_SOLAR_PANEL
 	fail &= radio_send_panel(panel_voltage);
 	fail &= radio_send_current(panel_voltage, resistor_voltage);
 #endif
-//	radio.txStandBy();
 
 	uint8_t addr[8];
 	uint8_t data[12];
 	uint8_t present;
 	int16_t raw;
-	int i = 20;
+	int i = 5;
 	while(!ds.search(addr) && i--) {
 		Serial.println("No more addresses.");
 		ds.reset_search();
@@ -210,7 +237,13 @@ void loop()
 		printf("Temperature is %d\n", (int)(100.0*(float)raw/16.0));
 	}
 
-	i = 10000;
+#if HAS_LCD
+	lcd.home();
+	lcd.print("Temperature");
+	lcd.setCursor(0,1);
+	lcd.print((float)raw/16.0);
+#endif
+	i = 100;
 
 	while (i--) {
 	    fail = radio_send('T', thermometer_identification_letter, (raw >> 8) & 0xFF, raw & 0xFF);
@@ -222,17 +255,21 @@ void loop()
 		delay(2000);
 	}
 sleep:	
+#if HAS_RF24
 	radio.powerDown();
+#endif
 	Serial.println("going to sleep now");
 	Serial.flush();
 	Sleepy::loseSomeTime(32768L);
 	Serial.println("waking up");
 
 	for (int i = 1; i < 15L*60L*1000L / 32768L; i++) {
+#if HAS_SOLAR_PANEL
 		if (battery_voltage(battery_level) >= 1.4f) {
 			// Battery is overcharged, try to waste energy!
 			delay(10000);
 		}
+#endif
 		if (!Sleepy::loseSomeTime(32768L)) {
 			Serial.println("woken up by intr");
 		}

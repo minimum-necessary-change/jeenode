@@ -162,9 +162,12 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	FILE *out = fopen("/tmp/a.undelta7", "w");
+
 	printf("Statistics\nValue\tDelta prev\n");
 	while (!feof(f)) {
 		fread(&val[0], 2, BUFSIZE, f);
+#if 0
 		do_stats(val);
 //		do_delta7(val);
 		uint8_t out_packed[BUFSIZE * 2];
@@ -187,6 +190,14 @@ int main(int argc, char **argv)
 				fprintf(stderr, "Error undelta7ing byte %d: %#x vs %#x\n", i, val[i], out_undelta7[i]);
 			}
 		}
+#endif
+		uint16_t out_undelta7[BUFSIZE*2];
+		int sz = do_undelta7((uint8_t *)&val[0], BUFSIZE*2, out_undelta7);
+		printf("Undelta7... %d bytes\n", sz);
+		fwrite(&out_undelta7, 1, sz, out);
+
 	}
+	fclose(f);
+	fclose(out);
 }
 

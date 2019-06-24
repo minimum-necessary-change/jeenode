@@ -32,18 +32,20 @@ static void handleRoot() {
 "<html><head><title>ESP8266</title></head><body>\
     <h1>Hello from ESP8266!</h1>\
     <p>Built on %s at %s</p><p>Uptime: %02d:%02d:%02d = %d ms</p>\
-	<p>Current power is %d, %sforced until %d</p> \
+	<p>Current power is %d, %sforced until %d, %d minutes from now</p> \
   </body></html>",
 
 		__DATE__, __TIME__, hr, min % 60, sec % 60, millis(),
-		pwm, (forced_heating_until ? "" : "not "), forced_heating_until
+		pwm, (forced_heating_until ? "" : "not "), forced_heating_until, (forced_heating_until - millis()) / 60 / 1000
 	);
 	websrv.send ( 200, "text/html", temp );
 }
 
 static void pushbtn_intr(void)
 {
-	pushbtn_pressed = true;
+	if (!digitalRead(pushbtn)) {
+		pushbtn_pressed = true;
+	}
 }
 
 void setup ( void ) {
@@ -129,6 +131,9 @@ static void parse_cmd(const char *buf)
 		change_pwm("100");
 	} else if (!strncmp(buf, "OFF", 3)) {
 		change_pwm("0");
+	} else if (!strncmp(buf, "FORCEOFF", 8)) {
+		change_pwm("0");
+		forced_heating_until = 0;
 	} 
 }
 
@@ -137,9 +142,12 @@ void loop ( void ) {
 
 	bool force_heating = false;
 
-	if (pushbtn_pressed) {
-		force_heating = true;
-		pushbtn_pressed = false;
+	if (pushbtn_pressed && !digitalRead(pushbtn)) {
+		delay(5);
+		if (!digitalRead(pushbtn)) {
+			force_heating = true;
+			pushbtn_pressed = false;
+		}
 	}
 
 	if (force_heating) {
@@ -148,8 +156,7 @@ void loop ( void ) {
 		// Force heating for 20 minutes
 		forced_heating_until = millis() + 20 * 60 * 1000; 
 
-		// On overflow, put burner at full power, but don't set 
-		// a end date, so the next change request will be accepted
+		// Overflow: ignore
 		if (forced_heating_until < millis()) {
 			forced_heating_until = 0;
 		}

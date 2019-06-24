@@ -1,1 +1,1 @@
-../../thermometer_esp8266/wifi_params.h
+../xmit/wifi_params.h

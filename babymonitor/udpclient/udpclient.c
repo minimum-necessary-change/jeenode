@@ -65,7 +65,7 @@ int main (int argc, char **argv){
   nonacks=0;
   acks=0;
  
-  host = "192.168.0.31";
+  host = "192.168.0.13";
   port = "45990";
  
   /*initilize addrinfo structure*/

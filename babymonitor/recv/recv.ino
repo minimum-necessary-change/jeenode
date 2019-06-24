@@ -7,6 +7,7 @@
 
 #include "wifi_params.h"
 
+const IPAddress softAP_myaddress(192, 168, 0, 13);
 
 const int mySDA = D7;
 const int mySCL = D6;
@@ -34,8 +35,8 @@ bool play_waiting = true;
 bool amplifier_stopped = false;
 long play_waiting_at;
 
-bool left_btn_pressed;
-bool right_btn_pressed;
+volatile bool left_btn_pressed;
+volatile bool right_btn_pressed;
 
 #define ICACHE_RAM_ATTR     __attribute__((section(".iram.text")))
 #define twi_sda mySDA
@@ -212,13 +213,29 @@ void setup ( void )
 	i2c.setClock(400000);
 
 	WiFi.mode(WIFI_STA);
-	WiFi.begin(ssid, password);
-	WiFi.setSleepMode(WIFI_MODEM_SLEEP);
-
-	Serial.print("Connecting to wifi");
-	while ( WiFi.status() != WL_CONNECTED ) {
-		delay ( 500 );
-		Serial.print ( "." );
+	bool found = false;
+	int n = WiFi.scanNetworks();
+	for (int i = 0; i < n; i++) {
+		if (WiFi.SSID(i).equals(ssid)) {
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		Serial.println("No wifi network found, starting softAP\n");
+		WiFi.disconnect();
+		WiFi.mode(WIFI_AP);
+		WiFi.softAPConfig(softAP_myaddress, softAP_myaddress, IPAddress(255,255,255,0));
+		WiFi.softAP(softap_ssid, softap_password);
+	} else {
+		WiFi.begin(ssid, password);
+		WiFi.setSleepMode(WIFI_MODEM_SLEEP);
+		Serial.print("Connecting to wifi");
+		int now = millis();
+		while (WiFi.status() != WL_CONNECTED) {
+			delay(500);
+			Serial.print(".");
+		}
 	}
 
 	Serial.println ( "" );
@@ -341,7 +358,8 @@ void loop ( void )
 	if (right_btn_pressed) {
 			digitalWrite(AMPLI_SHUTDOWN_PIN, 1);
 			digitalWrite(AMPLI_MUTE_PIN, 1);
-			udp.beginPacket(udp.remoteIP(), 45990);
+			const IPAddress bcast(255, 255, 255, 255);
+			udp.beginPacket(bcast, 45990);
 			udp.write("sendnow");
 			udp.endPacket();
 			right_btn_pressed = 0;
